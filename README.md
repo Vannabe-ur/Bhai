@@ -19,8 +19,15 @@ bhai-irrfan/
 │   └── irrfan_sample.wav    ← Drop 10–30s WAV here for voice cloning
 ├── data/
 │   └── tasks.json           ← Auto-saved tasks
-├── audio/                   ← Generated speech files (auto-cleaned)
+├── notebooks/
+│   ├── voice
+|   │   ├── dataset/
+|   │   ├── result /
+|   │   └── saved_model/
+│   ├── tts_notebook.ipynb
+│   └── tts_server.py                
 ├── requirements.txt
+├── env.       ← saving GEMENI_KEY
 ├── start_windows.bat
 └── start_mac_linux.sh
 ```
@@ -29,10 +36,10 @@ bhai-irrfan/
 
 ## ⚡ Quick Start
 
-### Step 1 — Get an Anthropic API key
-1. Go to https://console.anthropic.com
+### Step 1 — Gemini API key
+1. Go to google console https://console.cloud.google.com
 2. Create an API key
-3. Keep it ready (you'll paste it on first run)
+3. Keep it ready (we'll paste it on first run)
 
 ### Step 2 — Set up Google Calendar (optional but recommended)
 1. Go to https://console.cloud.google.com
@@ -77,10 +84,7 @@ The desktop HUD opens automatically. If your system cannot load `pywebview`, it 
 | **Tasks** | Add with deadline, color-coded urgency |
 | **Deadline alerts** | Banner + voice alert when overdue |
 | **Gmail Calendar** | Today's events pulled via Google API |
-| **AI agent** | Ask Irrfan anything about your tasks |
-| **Voice input** | Click 🎙 and speak (Chrome/Edge) |
-| **Voice training** | Upload a WAV sample from the HUD |
-| **Voice output** | Coqui TTS (cloned) or browser fallback |
+| **AI agent** | Ask Irrfan anything about tasks |
 | **Persistent tasks** | Saved in `data/tasks.json` |
 
 ---
@@ -131,17 +135,33 @@ Set in your shell, `.env` file, or paste when prompted on first run.
 → Use a clean recording, 16kHz+ mono WAV, 15–30 seconds is ideal
 
 **Port already in use**
-→ Change port in start script: `--port 8001` and update API = 'http://localhost:8001' in index.html
+→ The backend now handles TTS itself on port 8000, so no external 8001 service is required.
 
 ---
 
-## 📦 Dependencies
+## 📦 Running projects
+
+
+- Step 1: git clone repo and install dependencies 
 
 ```
-fastapi          — web server
-uvicorn          — ASGI server
-anthropic        — Claude AI
-google-api-*     — Google Calendar
-pyttsx3          — lightweight TTS fallback
-TTS (optional)   — Coqui voice cloning
+pip intall -r requirements.txt
+```
+
+- Step 2: activate `tts_server.py`
+
+```
+python notebooks/tts_server.py
+```
+
+- Step 3: run api
+
+```
+uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+- Step 4: run desktop app
+
+```
+python desktop_app.py
 ```

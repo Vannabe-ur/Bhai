@@ -148,6 +148,27 @@ def load_model() -> None:
         _model_ready = True
         print(">> TTS microservice ready on http://localhost:8001")
 
+        # Pre-warm: run one silent inference so first real request is faster
+        print("⏳ Pre-warming model...")
+        try:
+            model = _tts_model.synthesizer.tts_model
+            model.eval()
+            with torch.no_grad():
+                _ = model.inference(
+                    text="Ready.",
+                    language="en",
+                    gpt_cond_latent=_gpt_cond_latent,
+                    speaker_embedding=_speaker_embedding,
+                    speed=SPEECH_SPEED,
+                    temperature=0.7,
+                    repetition_penalty=10.0,
+                    top_k=30,
+                    top_p=0.80,
+                )
+            print(">> Model pre-warmed — first speech request will be faster")
+        except Exception as e:
+            print(f"⚠ Pre-warm failed (non-critical): {e}")
+
     except Exception as e:
         _model_error = str(e)
         print(f">> TTS model failed to load: {e}")

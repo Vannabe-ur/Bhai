@@ -504,46 +504,100 @@ function addMsg(type,text){
 }
 
 async function sendChat(){
-  const inp = document.getElementById('aginp');
-  const txt = inp.value.trim();
-  if(!txt) return;
-  inp.value = '';
-  addMsg('user', txt);
-  const thinking = addMsg('sys', '...');
+    const inp = document.getElementById('aginp');
+    const txt = inp.value.trim();
+    if(!txt) return;
+    inp.value = '';
+    addMsg('user', txt);
+    const thinking = addMsg('sys', '...');
 
-  // DON'T push user message yet — send history WITHOUT current message
-  try {
-    const r = await fetch(API + '/chat', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        message: txt,
-        history: chatHistory.slice(-10)  // history of PREVIOUS turns only
-      })
-    });
-    if (r.status === 429) {
-      thinking.remove();
-      addMsg('sys', 'IRRFAN RESTING — quota limit hit, retry in a minute');
-      return;
-    }
-    const d = await r.json();
-    thinking.remove();
+    try {
+        const r = await fetch(API + '/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                message: txt,
+                history: chatHistory.slice(-10)
+            })
+        });
+        const d = await r.json();
+        thinking.remove();
 
-    if (d.reply) {
-      addMsg('agent', d.reply);
-      // NOW push both turns after successful response
-      chatHistory.push({role: 'user',      content: txt});
-      chatHistory.push({role: 'assistant', content: d.reply});
-      speak(d.reply);
-    } else {
-      addMsg('sys', 'ERROR: empty reply');
+        if (d.reply) {
+            addMsg('agent', d.reply);
+            chatHistory.push({role: 'user', content: txt});
+            chatHistory.push({role: 'assistant', content: d.reply});
+
+            // speak first sentence immediately, queue the rest
+            speakInChunks(d.reply);
+        }
+    } catch(e) {
+        thinking.remove();
+        addMsg('sys', 'ERROR: BACKEND OFFLINE');
     }
-  } catch(e) {
-    thinking.remove();
-    addMsg('sys', 'ERROR: BACKEND OFFLINE');
-  }
 }
 
+// Split reply into sentences, speak one at a time
+async function speakInChunks(fullText) {
+    // Split on sentence boundaries
+    const sentences = fullText
+        .split(/(?<=[.!?])\s+/)
+        .filter(s => s.trim().length > 0);
+
+    document.getElementById('fvoice').textContent = 'VOICE: GENERATING...';
+
+    for (const sentence of sentences) {
+        await speakOne(sentence);
+    }
+
+    document.getElementById('fvoice').textContent = 'VOICE: READY';
+}
+
+async function speakOne(text) {
+    return new Promise(async (resolve) => {
+        try {
+            const r = await fetch(API + '/speak', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    text: text,
+                    message_type: getMessageType(text)
+                })
+            });
+            if (!r.ok) throw new Error('TTS fail');
+            const blob = await r.blob();
+            const url = URL.createObjectURL(blob);
+
+            if (currentAudio) {
+                currentAudio.pause();
+                URL.revokeObjectURL(currentAudio.src);
+            }
+            currentAudio = new Audio(url);
+            currentAudio.volume = volume;
+
+            // resolve when this sentence finishes playing
+            // so next sentence starts immediately after
+            currentAudio.onended = () => {
+                URL.revokeObjectURL(url);
+                resolve();
+            };
+            currentAudio.onerror = () => resolve(); // skip on error
+            currentAudio.play();
+
+        } catch(e) {
+            // fallback for this sentence only
+            console.error('TTS error, falling back to browser TTS:', e);
+            if (window.speechSynthesis) {
+                const u = new SpeechSynthesisUtterance(text);
+                u.rate = 0.92; u.volume = volume;
+                u.onend = () => resolve();
+                speechSynthesis.speak(u);
+            } else {
+                resolve();
+            }
+        }
+    });
+}
 document.getElementById('aginp').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat();});
 
 // ── Boot ──────────────────────────────────────────────────────

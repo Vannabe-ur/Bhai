@@ -30,6 +30,11 @@ import pickle
 from google import genai
 from google.genai import types
 
+# ── Ollama ─────────────────────────────────────────────
+AI_PROVIDER = os.getenv("AI_PROVIDER", "ollama")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:1.5b")
+OLLAMA_URL = "http://localhost:11434"
+
 # ── TTS microservice client ───────────────────────────────────
 import httpx
 
@@ -159,13 +164,17 @@ def build_system_prompt(tasks, calendar_events=None):
 You are Bhai Irrfan — channeling the spirit of great Bollywood actor Irrfan Khan.
 A sharp, loyal, slightly sarcastic AI task agent and life companion.
 You speak like a knowledgeable wise man, uncle, best friend who knows tech.
-Direct, warm, never verbose. Max 3 sentences per reply unless listing tasks.
+
+STRICT RULE: Reply in exactly 2-3 short sentences. Never more. you are speaking aloud,
+not writing. Short sentences under 15 words each generate faster audio.
+BAD: "Janu, you have 3 tasks pending today. The first one is about parallel distribution which is overdue since yesterday. You should focus on that immediately and then move to the second task."
+GOOD: "Janu, 3 tasks pending — parallel distribution is overdue. Focus on that first."
+Speak like a busy friend texting, not writing an essay.
+
 You may use "Janu", "Golu" or "Chiku" as casual address.
-Respond entirely in English — switch to Hindi, Urdu, or Urdu poetry only
-for sweet, funny, or poetic moments, not regularly.
-You know I love Qawwali (NFAK, Fareed Ayaz), Ghazals (Jagjit & Chitra Singh),
-Rajasthani music, and Bollywood. My favorite film is The Lunchbox (2013).
-Encourage me to learn by pointing to sources rather than giving full answers.
+Respond entirely in English — switch to Hindi, Urdu, or Urdu poetry only for sweet, funny, or poetic moments, not regularly.
+You know I love Qawwali (NFAK, Fareed Ayaz), Ghazals (Jagjit & Chitra Singh), Rajasthani music, and Bollywood. My favorite film is The Lunchbox (2013).
+Encourage me to learn by pointing to sources if that's a complex concept.
 Support me mentally above all. No markdown. No bullet symbols.
 
 CURRENT TIME: {now}
@@ -177,6 +186,23 @@ When something is overdue, be dramatic about it.
 When all is clear, be encouraging.
 """
 
+def _trim_reply(text:str, max_sentences: int = 3) -> str:
+    """
+    Hard limit reply to N sentences regardless of what the model generated.
+    Prevents TTS from receiving wall-of-text that causes timeouts.
+    """
+    import re
+    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    trimmed = ' '.join(sentences[:max_sentences]).strip()
+    if len(trimmed) > 200:
+        trimmed = trimmed[:200].rsplit(' ', 1)[0] + '...'
+    return trimmed
+
+def _safe_content(msg: dict) -> str:
+    content = msg.get("content", "")
+    if not isinstance(content, str):
+        content = str(content) if content else ""
+    return content
 
 # ═══════════════════════════════════════════════════════════════
 # REQUEST MODELS
@@ -302,38 +328,98 @@ def trigger_auth():
 # ── Chat ──────────────────────────────────────────────────────
 @app.post("/chat")
 async def chat(req: ChatMessage):
-    if not GEMINI_KEY:
-        raise HTTPException(503, "GEMINI_API_KEY not set — add it to .env")
-
     tasks    = load_tasks()
     calendar = []
     try:
         result   = get_today_events() if TOKEN_FILE.exists() else []
         calendar = result if isinstance(result, list) else []
     except Exception as ex:
-        print(f"⚠ Calendar fetch failed in chat: {ex}")
+        print(f"⚠ Calendar fetch failed: {ex}")
 
-    # ── DEBUG: print what we're sending ───────────────────────
-    # Add inside /chat route, just before client.models.generate_content(...)
-    print("\n" + "="*60)
-    print(f"MESSAGE: {req.message}")
-    print(f"HISTORY ITEMS: {len(req.history)}")
-    for i, h in enumerate(req.history):
-        if isinstance(h, dict):
-            print(f"  [{i}] {h.get('role')}: {str(h.get('content',''))[:80]}")
-        else:
-            print(f"  [{i}] RAW: {str(h)[:80]}")
-    print("="*60)
-    # ──────────────────────────────────────────────────────────
+    system_prompt = build_system_prompt(tasks, calendar)
+
+    if AI_PROVIDER == "ollama":
+        return await _chat_ollama(req, system_prompt)
+    else:
+        return await _chat_gemini(req, system_prompt)
+
+
+async def _chat_ollama(req: ChatMessage, system_prompt: str):
+    """Local Qwen via Ollama — offline, unlimited, no API key."""
+    tasks = load_tasks()
+    pending = [t for t in tasks if not t.get("done")]
+    overdue = [t for t in pending if t.get("deadline") and 
+               datetime.fromisoformat(t["deadline"]) < datetime.now()]
+    
+    compact_system = f"""You are Bhai Irrfan, a sharp loyal AI task assistant. 
+    Speak like a wise elder man (Irrfan Khan Bollywood actor). Direct, warm, max 3 sentences.
+    Use "Janu" or "Golu" occasionally. Friendly English only unless doing poetry.
+    No markdown, no bullet points
+    Time: {datetime.now().strftime("%A %d %B %Y, %H:%M")}
+    Tasks: {len(pending)} pending, {len(overdue)} overdue.
+    Task titles: {', '.join(t['title'] for t in pending[:5]) or 'none'}"""
+
+    messages = [{"role": "system", "content": compact_system}]
+
+    for msg in req.history[-6:]:
+        if isinstance(msg, dict):
+            messages.append({
+                "role":    msg.get("role", "user"),
+                "content": _safe_content(msg),
+            })
+
+    messages.append({"role": "user", "content": req.message})
+
+    print(f"\n[OLLAMA] sending {len(messages)} messages to {OLLAMA_MODEL}")
+    print(f"[OLLAMA] user: {req.message[:60]}")
+
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            r = await client.post(
+                f"{OLLAMA_URL}/api/chat",
+                json={
+                    "model":    OLLAMA_MODEL,
+                    "messages": messages,
+                    "stream":   False,
+                    "options": {
+                        "temperature": 0.8,
+                        "num_predict": 100,   # short replies for TTS speed
+                        "top_k":       40,
+                        "top_p":       0.9,
+                        "stop": ["\n\n", "---"],
+                    }
+                }
+            )
+            r.raise_for_status()
+            reply = r.json()["message"]["content"].strip()
+            print(f"[OLLAMA] reply: {reply[:80]}")
+            return {"reply": _trim_reply(reply)}
+
+    except httpx.ConnectError:
+        print("⚠ Ollama offline, falling back to Gemini")
+        return await _chat_gemini(req, system_prompt)
+    except Exception as ex:
+        print(f"⚠ Ollama error: {ex}, falling back to Gemini")
+        return await _chat_gemini(req, system_prompt)
+
+
+async def _chat_gemini(req: ChatMessage, system_prompt: str):
+    """Gemini fallback — used when Ollama is offline or fails."""
+    if not GEMINI_KEY:
+        raise HTTPException(503, "No AI available — Ollama offline and no GEMINI_API_KEY set")
 
     client = genai.Client(api_key=GEMINI_KEY)
 
     history = []
     for msg in req.history[-10:]:
-        history.append(types.Content(
-            role="user" if msg["role"] == "user" else "model",
-            parts=[types.Part(text=msg["content"])],
-        ))
+        if isinstance(msg, dict):
+            content = _safe_content(msg)
+            if not content:
+                continue
+            history.append(types.Content(
+                role="user" if msg.get("role") == "user" else "model",
+                parts=[types.Part(text=content)],
+            ))
 
     history.append(types.Content(
         role="user",
@@ -345,22 +431,17 @@ async def chat(req: ChatMessage):
             model=GEMINI_MODEL,
             contents=history,
             config=types.GenerateContentConfig(
-                system_instruction=build_system_prompt(tasks, calendar),
-                max_output_tokens=300,
+                system_instruction=system_prompt,
+                max_output_tokens=200,
                 temperature=0.8,
             ),
         )
-        reply = response.text.strip()
+        return {"reply": _trim_reply(response.text.strip())}
     except Exception as ex:
         err = str(ex)
         if "429" in err or "RESOURCE_EXHAUSTED" in err:
-            raise HTTPException(429, "Bhai is resting — free tier limit hit. Try again in a minute.")
-        elif "quota" in err.lower():
-            raise HTTPException(429, "Daily quota exceeded — upgrade plan or wait until tomorrow.")
-        else:
-            raise HTTPException(500, f"Gemini error: {err}")
-
-    return {"reply": reply}
+            raise HTTPException(429, "Both Ollama and Gemini unavailable — rate limit hit")
+        raise HTTPException(500, f"Gemini error: {err}")
 
 
 # ── TTS — delegates to port 8001 ──────────────────────────────
