@@ -1,0 +1,13 @@
+.env
+.venv/
+.agents/
+__pycache__/
+{backend,frontend,scripts}
+start_mac_linux.sh
+start_windows.bat
+
+credentials/
+notebooks/tts_notebook.ipynb
+
+backend/__pycache__/
+

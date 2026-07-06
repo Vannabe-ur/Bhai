@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Bhai Irrfan</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323:wght@400&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0a0a;width:100vw;height:100vh;overflow:hidden;font-family:'Share Tech Mono',monospace}
+body.compact{background:#040604}
+
+/* ── HUD ──────────────────────────────────── */
+#hud{
+  position:fixed;top:20px;right:20px;
+  width:320px;
+  background:rgba(0,12,4,0.97);
+  border:1px solid #00ff41;
+  box-shadow:0 0 20px rgba(0,255,65,0.12),inset 0 0 30px rgba(0,255,65,0.02);
+  z-index:9999;
+  user-select:none;
+  border-radius:2px;
+}
+body.compact #hud{
+  width:280px;
+  box-shadow:0 0 26px rgba(0,255,65,0.18),inset 0 0 30px rgba(0,255,65,0.03);
+}
+#scan{
+  position:absolute;inset:0;pointer-events:none;border-radius:2px;
+  background:repeating-linear-gradient(
+    to bottom,transparent 0px,transparent 3px,
+    rgba(0,255,65,0.012) 3px,rgba(0,255,65,0.012) 4px
+  );
+}
+#titlebar{
+  background:#00ff41;color:#000;
+  font-family:'VT323',monospace;font-size:15px;
+  padding:4px 10px;display:flex;
+  justify-content:space-between;align-items:center;
+  cursor:grab;
+}
+#titlebar:active{cursor:grabbing}
+.tnode{font-size:10px;opacity:0.65;letter-spacing:1px}
+.modebtn{
+  background:rgba(0,0,0,0.18);
+  border:1px solid rgba(0,0,0,0.22);
+  color:#000;
+  font-family:'VT323',monospace;
+  font-size:12px;
+  padding:1px 6px;
+  cursor:pointer;
+  margin-right:6px;
+}
+.modebtn:hover{background:rgba(255,255,255,0.18)}
+
+/* ── Sections ────────────────────────────── */
+.sec{border-bottom:1px solid #001a08;padding:6px 10px}
+.sec:last-child{border-bottom:none}
+.lbl{font-size:9px;color:#008a22;letter-spacing:2px;margin-bottom:4px}
+
+/* ── Clock ───────────────────────────────── */
+.clock-row{display:flex;justify-content:space-between;align-items:baseline}
+#clock{font-family:'VT323',monospace;font-size:34px;color:#00ff41;letter-spacing:3px}
+.clock-right{text-align:right}
+#dateline{font-size:10px;color:#009a28;line-height:1.5}
+#uptime{font-size:9px;color:#006a18}
+.sigbar{display:flex;gap:2px;align-items:center;margin-top:3px}
+.sp{width:5px;height:7px;background:#002a0a;border-radius:1px}
+.sp.on{background:#00ff41}
+#sig-pct{font-size:9px;color:#006a18;margin-left:3px}
+
+/* ── Alert banner ─────────────────────────── */
+#alert{
+  display:none;background:#cc3300;color:#fff;
+  font-family:'VT323',monospace;font-size:13px;
+  padding:3px 10px;text-align:center;letter-spacing:1px;
+  animation:blink .5s step-end infinite;
+}
+@keyframes blink{50%{opacity:.25}}
+
+/* ── Tasks ────────────────────────────────── */
+#task-list{max-height:200px;overflow-y:auto;padding-right:2px}
+#task-list::-webkit-scrollbar{width:3px}
+#task-list::-webkit-scrollbar-thumb{background:#002a0a}
+.ti{
+  padding:4px 8px;margin-bottom:3px;
+  border:1px solid #001a08;border-left:3px solid #00ff41;
+  background:rgba(0,255,65,0.025);
+  font-size:10px;color:#00cc33;position:relative;cursor:pointer;
+}
+.ti:hover{background:rgba(0,255,65,0.05)}
+.ti.urgent{border-left-color:#ff8800;color:#ffaa44}
+.ti.overdue{border-left-color:#ff2200;color:#ff5555;animation:blink 1s step-end infinite}
+.ti.done{border-left-color:#002a0a;color:#004a14;text-decoration:line-through}
+.ttitle{font-size:10px;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.tmeta{font-size:9px;color:#005a18;display:flex;justify-content:space-between;margin-top:1px}
+.tmeta.urgent{color:#cc6600}
+.tmeta.overdue{color:#cc2200}
+.tchk{position:absolute;right:7px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:15px;color:#004a18}
+.tchk:hover{color:#00ff41}
+
+/* ── Add task ─────────────────────────────── */
+.add-row{display:flex;gap:4px;margin-top:5px}
+.ginp{
+  flex:1;background:transparent;border:1px solid #002a0a;
+  color:#00ff41;font-family:'Share Tech Mono',monospace;font-size:10px;
+  padding:3px 6px;outline:none;
+}
+.ginp:focus{border-color:#00ff41}
+.ginp::placeholder{color:#004018}
+.gbtn{
+  background:transparent;border:1px solid #008a22;color:#00ff41;
+  font-size:13px;cursor:pointer;padding:0 7px;
+}
+.gbtn:hover{background:#001508}
+#dl-inp{
+  width:100%;margin-top:3px;background:transparent;
+  border:1px solid #002a0a;color:#008a22;
+  font-family:'Share Tech Mono',monospace;font-size:9px;
+  padding:2px 6px;outline:none;
+}
+#dl-inp:focus{border-color:#00ff41}
+
+/* ── Calendar strip ───────────────────────── */
+#cal-strip{max-height:60px;overflow-y:auto;font-size:9px;color:#007a20;line-height:1.6}
+#cal-strip::-webkit-scrollbar{width:2px}
+#cal-btn{font-size:9px;color:#009a28;cursor:pointer;text-decoration:underline;margin-top:2px;display:inline-block}
+body.compact #cal-sec,
+body.compact #task-sec{
+  display:none;
+}
+
+/* ── Chat ─────────────────────────────────── */
+#chatlog{
+  height:90px;overflow-y:auto;
+  font-size:10px;color:#00cc33;
+  background:rgba(0,255,65,0.015);
+  border:1px solid #001a08;
+  padding:4px 6px;margin-bottom:5px;
+}
+body.compact #chatlog{
+  height:112px;
+}
+#chatlog::-webkit-scrollbar{width:3px}
+#chatlog::-webkit-scrollbar-thumb{background:#002a0a}
+.ma{color:#00ff41}.mu{color:#009a28}.ms{color:#005a14;font-style:italic}
+.chat-row{display:flex;gap:4px}
+#aginp{
+  flex:1;background:transparent;border:1px solid #002a0a;
+  color:#00ff41;font-family:'Share Tech Mono',monospace;font-size:10px;
+  padding:3px 6px;outline:none;
+}
+#aginp:focus{border-color:#00ff41}
+#aginp::placeholder{color:#004018}
+#micbtn{background:transparent;border:1px solid #008a22;color:#00ff41;font-size:13px;cursor:pointer;padding:0 6px}
+#micbtn.listening{border-color:#ff4400;color:#ff4400;animation:blink .5s step-end infinite}
+#sndbtn{background:transparent;border:1px solid #008a22;color:#00ff41;font-size:11px;cursor:pointer;padding:0 7px}
+.gbtn:hover,#micbtn:hover,#sndbtn:hover{background:#001508}
+
+/* ── Footer ───────────────────────────────── */
+#footer{padding:3px 10px;display:flex;justify-content:space-between;align-items:center}
+#fstatus{font-size:9px;color:#004018}
+#ftasks{font-size:9px;color:#008a22}
+#fvoice{font-size:9px;color:#008a22}
+#vol-row{display:flex;align-items:center;gap:5px;margin-top:4px}
+#vol-lbl{font-size:9px;color:#006018}
+#vol-sl{width:80px;accent-color:#00ff41}
+
+/* ── Status indicator ─────────────────────── */
+#dot{width:6px;height:6px;border-radius:50%;background:#00ff41;
+     display:inline-block;margin-right:4px;animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+#dot.offline{background:#ff2200;animation:blink .8s step-end infinite}
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div id="scan"></div>
+  <div id="titlebar">
+    <span>⬛ BHAI IRRFAN <span style="font-size:12px">v1.0</span></span>
+    <span class="tnode">
+      <button class="modebtn" id="modebtn" title="Toggle compact mode">POP</button>
+      <span id="dot"></span>TASK_CORE
+    </span>
+  </div>
+  <div id="alert"></div>
+
+  <!-- Clock -->
+  <div class="sec">
+    <div class="lbl">&gt; SYS.CLOCK</div>
+    <div class="clock-row">
+      <div id="clock">00:00:00</div>
+      <div class="clock-right">
+        <div id="dateline">DATE</div>
+        <div id="uptime">UPTIME: 00:00:00</div>
+      </div>
+    </div>
+    <div class="sigbar">
+      <span style="font-size:9px;color:#006018">SIG</span>
+      <div class="sp on"></div><div class="sp on"></div>
+      <div class="sp on"></div><div class="sp" id="s4"></div>
+      <div class="sp" id="s5"></div>
+      <span id="sig-pct">60%</span>
+    </div>
+  </div>
+
+  <!-- Calendar -->
+  <div class="sec" id="cal-sec">
+    <div class="lbl">&gt; GMAIL CALENDAR — TODAY
+      <span id="cal-btn" onclick="loadCalendar()">[SYNC]</span>
+    </div>
+    <div id="cal-strip">Connect Google Calendar to see today's events...</div>
+    <div id="vol-row">
+      <span class="vol-lbl" style="font-size:9px;color:#006018">VOL</span>
+      <input type="range" id="vol-sl" min="0" max="1" step="0.05" value="0.85"/>
+      <span id="vol-val" style="font-size:9px;color:#008a22">85%</span>
+    </div>
+  </div>
+
+  <!-- Tasks -->
+  <div class="sec" id="task-sec">
+    <div class="lbl">&gt; TASK_MATRIX</div>
+    <div id="task-list"></div>
+    <div class="add-row">
+      <input class="ginp" id="new-inp" placeholder="ADD TASK..." maxlength="50"/>
+      <button class="gbtn" onclick="addTask()">+</button>
+    </div>
+    <input type="datetime-local" id="dl-inp" title="Set deadline"/>
+  </div>
+
+  <!-- Agent -->
+  <div class="sec" id="agent-sec">
+    <div class="lbl">&gt; AGENT: IRRFAN // AI</div>
+    <div id="chatlog"></div>
+    <div class="chat-row">
+      <input class="ginp" id="aginp" placeholder="ASK IRRFAN..."/>
+      <button id="micbtn" title="Voice">🎙</button>
+      <button id="sndbtn" onclick="sendChat()">▶</button>
+    </div>
+    <div class="chat-row" style="margin-top:6px;align-items:center;gap:6px;">
+      <!-- Voice training UI removed: agent uses backend's configured voice sample automatically -->
+      <span style="font-size:9px;color:#008a22">VOICE: AUTOMATIC</span>
+    </div>
+  </div>
+
+  <div id="footer">
+    <span id="fstatus">CONNECTING...</span>
+    <span id="ftasks">0 TASKS</span>
+    <span id="fvoice">VOICE</span>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:8000';
+const startTime = Date.now();
+let tasks = [];
+let chatHistory = [];
+let currentAudio = null;
+let volume = 0.85;
+let voiceCloneReady = false;
+
+// ── Drag ─────────────────────────────────────────────────────
+const hud = document.getElementById('hud');
+const bar = document.getElementById('titlebar');
+let drag=false, ox=0, oy=0;
+bar.addEventListener('mousedown', e=>{
+  drag=true; const r=hud.getBoundingClientRect();
+  ox=e.clientX-r.left; oy=e.clientY-r.top;
+});
+document.addEventListener('mousemove', e=>{
+  if(!drag) return;
+  let nx=e.clientX-ox, ny=e.clientY-oy;
+  nx=Math.max(0,Math.min(nx,window.innerWidth-hud.offsetWidth));
+  ny=Math.max(0,Math.min(ny,window.innerHeight-hud.offsetHeight));
+  hud.style.right='auto'; hud.style.left=nx+'px'; hud.style.top=ny+'px';
+});
+document.addEventListener('mouseup',()=>drag=false);
+
+// ── Compact mode toggle ──────────────────────────────────────
+const modeBtn = document.getElementById('modebtn');
+function setCompactMode(enabled){
+  document.body.classList.toggle('compact', enabled);
+  modeBtn.textContent = enabled ? 'FULL' : 'POP';
+  localStorage.setItem('bhaiHudMode', enabled ? 'compact' : 'full');
+}
+setCompactMode(localStorage.getItem('bhaiHudMode') === 'compact');
+modeBtn.addEventListener('click', (e)=>{
+  e.stopPropagation();
+  setCompactMode(!document.body.classList.contains('compact'));
+});
+
+// ── Volume ───────────────────────────────────────────────────
+const volSl = document.getElementById('vol-sl');
+volSl.addEventListener('input', e=>{
+  volume = parseFloat(e.target.value);
+  document.getElementById('vol-val').textContent = Math.round(volume*100)+'%';
+});
+
+// ── Clock ────────────────────────────────────────────────────
+function p(n){return String(n).padStart(2,'0')}
+const DAYS=['SUN','MON','TUE','WED','THU','FRI','SAT'];
+const MONTHS=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+function tick(){
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    p(now.getHours())+':'+p(now.getMinutes())+':'+p(now.getSeconds());
+  document.getElementById('dateline').textContent =
+    DAYS[now.getDay()]+' '+p(now.getDate())+'-'+MONTHS[now.getMonth()]+'-'+now.getFullYear();
+  const el = Math.floor((Date.now()-startTime)/1000);
+  const h=Math.floor(el/3600),m=Math.floor((el%3600)/60),s=el%60;
+  document.getElementById('uptime').textContent = 'UPTIME: '+p(h)+':'+p(m)+':'+p(s);
+  const sig = Math.floor(Math.random()*2+3);
+  document.getElementById('s4').className='sp'+(sig>=4?' on':'');
+  document.getElementById('s5').className='sp'+(sig>=5?' on':'');
+  document.getElementById('sig-pct').textContent = Math.round(sig/5*100)+'%';
+  checkAlerts();
+}
+setInterval(tick,1000); tick();
+
+// ── Health check ─────────────────────────────────────────────
+async function checkHealth(){
+  try{
+    const r = await fetch(API+'/health');
+    const d = await r.json();
+    document.getElementById('fstatus').textContent =
+      '● ONLINE | TTS:'+d.tts+(d.voice_clone?' [CLONED]':'');
+    voiceCloneReady = !!d.voice_clone;
+    document.getElementById('fvoice').textContent =
+      voiceCloneReady ? 'VOICE: READY' : 'VOICE: NEED SAMPLE';
+    document.getElementById('dot').className='';
+    return d;
+  }catch(e){
+    document.getElementById('fstatus').textContent = '● OFFLINE — start backend';
+    document.getElementById('fvoice').textContent = 'VOICE: OFFLINE';
+    document.getElementById('dot').className='offline';
+  }
+}
+checkHealth();
+setInterval(checkHealth, 10000);
+
+// ── Load tasks ────────────────────────────────────────────────
+async function loadTasks(){
+  try{
+    const r = await fetch(API+'/tasks');
+    tasks = await r.json();
+    renderTasks();
+  }catch(e){ renderTasks(); }
+}
+
+function fmtDl(dl){
+  if(!dl) return 'NO DEADLINE';
+  const d = new Date(dl), now = Date.now();
+  const diff = d.getTime()-now;
+  if(diff<0) return '⚠ OVERDUE';
+  const h=Math.floor(diff/3600000), m=Math.floor((diff%3600000)/60000);
+  if(h>24) return 'DL '+p(d.getMonth()+1)+'/'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+  return 'DL T-'+h+'H'+p(m)+'M';
+}
+
+function getDoneSecondsLeft(task){
+  if(!task.done || !task.completed_at) return null;
+  const completed = new Date(task.completed_at).getTime();
+  if(Number.isNaN(completed)) return null;
+  return Math.max(0, 120 - Math.floor((Date.now() - completed) / 1000));
+}
+
+function renderTasks(){
+  const list = document.getElementById('task-list');
+  const now = Date.now();
+  list.innerHTML='';
+  tasks.forEach(t=>{
+    let st='';
+    if(!t.done && t.deadline){
+      const dl = new Date(t.deadline).getTime();
+      const diff = dl-now;
+      if(diff<0) st='overdue';
+      else if(diff<3600000) st='urgent';
+    }
+    if(t.done) st='done';
+    const div=document.createElement('div');
+    div.className='ti'+(st?' '+st:'');
+    const mc='tmeta'+(st==='overdue'?' overdue':st==='urgent'?' urgent':'');
+    const doneAge = getDoneSecondsLeft(t);
+    const doneLabel = t.done ? (doneAge !== null ? '✓ DONE · DEL '+doneAge+'S' : '✓ DONE') : 'PENDING';
+    div.innerHTML=
+      `<div class="ttitle">${t.title}</div>`+
+      `<div class="${mc}"><span>${fmtDl(t.deadline)}</span><span>${doneLabel}</span></div>`+
+      `<span class="tchk" data-id="${t.id}" title="Done">${t.done?'◈':'◇'}</span>`;
+    div.querySelector('.tchk').addEventListener('click',e=>{
+      e.stopPropagation();
+      toggleTask(parseInt(e.target.dataset.id));
+    });
+    list.appendChild(div);
+  });
+  const active = tasks.filter(t=>!t.done).length;
+  document.getElementById('ftasks').textContent = active+' ACTIVE / '+tasks.length+' TOTAL';
+}
+
+async function toggleTask(id){
+  const t = tasks.find(x=>x.id===id);
+  if(!t) return;
+  t.done=!t.done;
+  t.completed_at = t.done ? new Date().toISOString() : null;
+  try{ await fetch(API+'/tasks/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(t)}); }
+  catch(e){}
+  renderTasks();
+}
+
+async function addTask(){
+  const inp=document.getElementById('new-inp');
+  const dl=document.getElementById('dl-inp');
+  const txt=inp.value.trim().toUpperCase();
+  if(!txt) return;
+  const task={title:txt,deadline:dl.value||null,done:false};
+  try{
+    const r=await fetch(API+'/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(task)});
+    tasks.push(await r.json());
+  }catch(e){ tasks.push({...task,id:Date.now()}); }
+  inp.value=''; dl.value='';
+  renderTasks();
+  addMsg('sys','TASK ADDED: '+txt);
+}
+document.getElementById('new-inp').addEventListener('keydown',e=>{if(e.key==='Enter')addTask();});
+
+// ── Alerts ────────────────────────────────────────────────────
+let lastAlertTime=0;
+function checkAlerts(){
+  const now=Date.now();
+  const overdue=tasks.filter(t=>!t.done&&t.deadline&&new Date(t.deadline).getTime()<now);
+  const urgent=tasks.filter(t=>!t.done&&t.deadline&&new Date(t.deadline).getTime()-now<3600000&&new Date(t.deadline).getTime()>now);
+  const banner=document.getElementById('alert');
+  if(overdue.length>0){
+    banner.style.display='block';
+    banner.textContent='⚠ OVERDUE: '+overdue.map(t=>t.title.slice(0,18)).join(' | ');
+    if(now-lastAlertTime>120000){
+      lastAlertTime=now;
+      speak('Bhai, alert! '+overdue.length+' task is overdue: '+overdue[0].title);
+    }
+  } else if(urgent.length>0){
+    banner.style.display='block';
+    banner.textContent='⚡ URGENT: '+urgent[0].title.slice(0,26)+' DEADLINE NEAR';
+  } else {
+    banner.style.display='none';
+  }
+}
+
+// ── Calendar ──────────────────────────────────────────────────
+async function loadCalendar(){
+  const strip=document.getElementById('cal-strip');
+  strip.textContent='SYNCING...';
+  try{
+    const r=await fetch(API+'/calendar/today');
+    const data=await r.json();
+    if(data.error){
+      strip.innerHTML='<span style="color:#ff6600">'+data.error+'</span> <a href="#" onclick="authCal()" style="color:#00ff41">AUTH</a>';
+      return;
+    }
+    const events=data.events||data;
+    if(!events.length){strip.textContent='NO EVENTS TODAY';return;}
+    strip.innerHTML=events.map(e=>`<div>◆ ${e.start} — ${e.summary}</div>`).join('');
+  }catch(e){
+    strip.innerHTML='<span style="color:#ff4400">BACKEND OFFLINE</span>';
+  }
+}
+async function authCal(){
+  try{ await fetch(API+'/calendar/auth'); loadCalendar(); }
+  catch(e){}
+}
+
+// ── TTS ───────────────────────────────────────────────────────
+async function speak(text){
+  try{
+    const r=await fetch(API+'/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+    if(!r.ok) throw new Error('TTS fail');
+    const blob=await r.blob();
+    const url=URL.createObjectURL(blob);
+    if(currentAudio){currentAudio.pause();URL.revokeObjectURL(currentAudio.src);}
+    currentAudio=new Audio(url);
+    currentAudio.volume=volume;
+    currentAudio.play();
+  }catch(e){
+    // fallback to browser TTS
+    if(window.speechSynthesis){
+      const u=new SpeechSynthesisUtterance(text);
+      u.rate=0.92; u.pitch=0.8; u.volume=volume;
+      const voices=speechSynthesis.getVoices();
+      const male=voices.find(v=>v.name.includes('Male')||v.name.includes('David')||v.name.includes('Mark'));
+      if(male) u.voice=male;
+      speechSynthesis.speak(u);
+    }
+  }
+}
+
+// ── Chat ──────────────────────────────────────────────────────
+function addMsg(type,text){
+  const log=document.getElementById('chatlog');
+  const div=document.createElement('div');
+  div.className=type==='agent'?'ma':type==='user'?'mu':'ms';
+  div.textContent=(type==='agent'?'IRRFAN> ':type==='user'?'YOU> ':'[SYS] ')+text;
+  log.appendChild(div);
+  log.scrollTop=log.scrollHeight;
+  return div;
+}
+
+async function sendChat(){
+  const inp = document.getElementById('aginp');
+  const txt = inp.value.trim();
+  if(!txt) return;
+  inp.value = '';
+  addMsg('user', txt);
+  const thinking = addMsg('sys', '...');
+
+  // DON'T push user message yet — send history WITHOUT current message
+  try {
+    const r = await fetch(API + '/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        message: txt,
+        history: chatHistory.slice(-10)  // history of PREVIOUS turns only
+      })
+    });
+    if (r.status === 429) {
+      thinking.remove();
+      addMsg('sys', 'IRRFAN RESTING — quota limit hit, retry in a minute');
+      return;
+    }
+    const d = await r.json();
+    thinking.remove();
+
+    if (d.reply) {
+      addMsg('agent', d.reply);
+      // NOW push both turns after successful response
+      chatHistory.push({role: 'user',      content: txt});
+      chatHistory.push({role: 'assistant', content: d.reply});
+      speak(d.reply);
+    } else {
+      addMsg('sys', 'ERROR: empty reply');
+    }
+  } catch(e) {
+    thinking.remove();
+    addMsg('sys', 'ERROR: BACKEND OFFLINE');
+  }
+}
+
+document.getElementById('aginp').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat();});
+
+// ── Boot ──────────────────────────────────────────────────────
+loadTasks();
+loadCalendar();
+setTimeout(()=>{
+  const h=new Date().getHours(); const greeting=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
+  const n=tasks.filter(t=>!t.done).length;
+  const msg=greeting+' Here is Irrfan, online. You have '+n+' tasks pending. Shall I brief you?';
+  addMsg('agent',msg);
+  speak(msg);
+},1500);
+</script>
+</body>
+</html>
