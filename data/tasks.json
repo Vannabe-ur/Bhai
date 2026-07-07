@@ -1,1 +1,26 @@
-[]
+[
+  {
+    "id": 1783421055954,
+    "title": "NEW TASK",
+    "deadline": null,
+    "done": false,
+    "notes": null,
+    "completed_at": null
+  },
+  {
+    "id": 1783429531386,
+    "title": "GO OUT AND EAT",
+    "deadline": null,
+    "done": false,
+    "notes": null,
+    "completed_at": null
+  },
+  {
+    "id": 1783429535489,
+    "title": "PLAY GAME",
+    "deadline": null,
+    "done": false,
+    "notes": null,
+    "completed_at": null
+  }
+]
