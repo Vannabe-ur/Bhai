@@ -1,26 +1,33 @@
 """
-Bhai Irrfan — Desktop launcher
-Starts BOTH servers silently, then opens the UI with transparent background.
-
-  Port 8000 — main backend  (tasks, chat, calendar)
-  Port 8001 — TTS server    (voice cloning, speech)
-  Port 8002 — frontend server (serves index.html)
+Bhai Irrfan — Desktop Launcher
+Starts backend (8000) + TTS (8001) silently, opens frameless transparent UI.
+Right-click system tray → Quit / Restart Voice / Show Window
 """
 
 from __future__ import annotations
-import os, signal, subprocess, sys, threading, time, http.server, socketserver
+import os, signal, subprocess, sys, threading, time
 from pathlib import Path
 
-URL          = "http://127.0.0.1:8000"
-FRONTEND_URL = "http://127.0.0.1:8002"
-BASE_DIR     = Path(__file__).parent
-BACKEND_DIR  = BASE_DIR / "backend"
-NOTEBOOKS_DIR= BASE_DIR / "notebooks"
-FRONTEND_DIR = BASE_DIR / "frontend"
+URL           = "http://127.0.0.1:8000"   # FastAPI serves frontend/index.html here
+BASE_DIR      = Path(__file__).parent
+BACKEND_DIR   = BASE_DIR / "backend"
+NOTEBOOKS_DIR = BASE_DIR / "notebooks"
 
+class Api:
+    def __init__(self):
+        self._window = None
 
+    def set_window(self, window):
+        self._window = window
+
+    def resize_to_content(self, height: int):
+        """Called from JS when content height changes"""
+        if self._window:
+            new_height = max(300, min(int(height) + 2, 1000))
+            self._window.resize(420, new_height)
+
+# ── Environment ───────────────────────────────────────────────
 def _load_env() -> dict:
-    """Read .env into a dict to pass to subprocesses."""
     env = os.environ.copy()
     env_file = BASE_DIR / ".env"
     if env_file.exists():
@@ -33,47 +40,13 @@ def _load_env() -> dict:
 
 
 def _no_window() -> dict:
-    """Windows-only: hide console window for subprocess."""
     if sys.platform == "win32":
         return {"creationflags": subprocess.CREATE_NO_WINDOW}
     return {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
 
 
-def start_frontend_server() -> None:
-    """Start a simple HTTP server for frontend files on port 8002."""
-    if not FRONTEND_DIR.exists():
-        print(f"⚠  Frontend directory not found: {FRONTEND_DIR}")
-        return
-    
-    # Change to frontend directory
-    original_dir = os.getcwd()
-    os.chdir(str(FRONTEND_DIR))
-    
-    try:
-        # Create handler that serves index.html by default
-        handler = http.server.SimpleHTTPRequestHandler
-        
-        # Allow reuse of address
-        socketserver.TCPServer.allow_reuse_address = True
-        
-        with socketserver.TCPServer(("127.0.0.1", 8002), handler) as httpd:
-            print(f"✅ Frontend server running on {FRONTEND_URL}")
-            httpd.serve_forever()
-    except OSError as e:
-        print(f"⚠  Could not start frontend server on port 8002: {e}")
-        print("   Trying alternative port 8003...")
-        try:
-            with socketserver.TCPServer(("127.0.0.1", 8003), handler) as httpd:
-                print(f"✅ Frontend server running on http://127.0.0.1:8003")
-                httpd.serve_forever()
-        except Exception as e2:
-            print(f"❌ Failed to start frontend server: {e2}")
-    finally:
-        os.chdir(original_dir)
-
-
+# ── Server launchers ──────────────────────────────────────────
 def start_backend(env: dict) -> subprocess.Popen | None:
-    """Start main FastAPI backend on port 8000."""
     main_py = BACKEND_DIR / "main.py"
     if not main_py.exists():
         print(f"⚠  backend/main.py not found")
@@ -86,10 +59,9 @@ def start_backend(env: dict) -> subprocess.Popen | None:
 
 
 def start_tts(env: dict) -> subprocess.Popen | None:
-    """Start TTS microservice on port 8001."""
     tts_py = NOTEBOOKS_DIR / "tts_server.py"
     if not tts_py.exists():
-        print(f"⚠  notebooks/tts_server.py not found — voice will be silent")
+        print(f"⚠  notebooks/tts_server.py not found — voice silent")
         return None
     return subprocess.Popen(
         [sys.executable, str(tts_py)],
@@ -98,7 +70,6 @@ def start_tts(env: dict) -> subprocess.Popen | None:
 
 
 def wait_for(url: str, timeout: int = 20) -> bool:
-    """Wait for a URL to become available."""
     import urllib.request
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -110,16 +81,18 @@ def wait_for(url: str, timeout: int = 20) -> bool:
     return False
 
 
+# ── System tray ───────────────────────────────────────────────
 def start_tray(procs: list, window=None) -> None:
-    """System tray icon with menu."""
     try:
         import pystray
         from PIL import Image, ImageDraw
-        img = Image.new("RGBA", (64, 64), (0,0,0,0))
+
+        # Green terminal icon — transparent background
+        img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
-        d.rectangle([12,12,52,52], fill="#00ff41")
-        d.rectangle([20,20,44,44], fill="#000000")
-        d.rectangle([26,26,38,38], fill="#00ff41")
+        d.rectangle([12, 12, 52, 52], fill="#00ff41")
+        d.rectangle([20, 20, 44, 44], fill="#000000")
+        d.rectangle([26, 26, 38, 38], fill="#00ff41")
 
         def on_quit(icon, _):
             icon.stop()
@@ -129,21 +102,15 @@ def start_tray(procs: list, window=None) -> None:
             sys.exit(0)
 
         def on_show(icon, _):
-            """Bring window to front if minimized/ hidden."""
             if window:
-                try:
-                    window.show()
-                except Exception:
-                    pass
-        
+                try: window.show()
+                except Exception: pass
+
         def on_restart_tts(icon, _):
-            """Restart TTS server if it crashed."""
             env = _load_env()
             tts_py = NOTEBOOKS_DIR / "tts_server.py"
             if not tts_py.exists():
-                print("⚠  tts_server.py not found")
                 return
-
             kwargs = {
                 "args": [sys.executable, str(tts_py)],
                 "cwd":  str(tts_py.parent),
@@ -154,102 +121,110 @@ def start_tray(procs: list, window=None) -> None:
             else:
                 kwargs["stdout"] = subprocess.DEVNULL
                 kwargs["stderr"] = subprocess.DEVNULL
-
             subprocess.Popen(**kwargs)
-            print(">> TTS server restarted from tray")
+            print("✅ TTS restarted from tray")
 
         pystray.Icon("BhaiIrrfan", img, "Bhai Irrfan",
             menu=pystray.Menu(
-                pystray.MenuItem("Bhai Irrfan v1.0", lambda *_: None, enabled=False),
+                pystray.MenuItem("Bhai Irrfan  v1.0", lambda *_: None, enabled=False),
                 pystray.Menu.SEPARATOR,
-                pystray.MenuItem("Show Window", on_show),
+                pystray.MenuItem("Show Window",   on_show),
                 pystray.MenuItem("Restart Voice", on_restart_tts),
                 pystray.Menu.SEPARATOR,
-                pystray.MenuItem("Quit", on_quit),
+                pystray.MenuItem("Quit",          on_quit),
             )
         ).run()
     except Exception as e:
-        print(f"⚠  Tray unavailable: {e}")
+        print(f"⚠  Tray unavailable ({e}) — use Ctrl+Shift+Q inside the window")
 
 
+# ── Main ──────────────────────────────────────────────────────
 def main() -> None:
     env = _load_env()
 
-    # Start frontend server first (serves index.html)
-    print("Starting frontend server (port 8002)...")
-    frontend_thread = threading.Thread(target=start_frontend_server, daemon=True)
-    frontend_thread.start()
-    
-    # Give frontend server a moment to start
-    time.sleep(1)
-
-    # Start backend servers
-    print("Starting main backend (port 8000)...")
+    # 1. Start both servers silently
+    print("Starting backend  (port 8000)...")
     main_proc = start_backend(env)
 
-    print("Starting TTS server (port 8001)...")
+    print("Starting TTS      (port 8001)...")
     tts_proc = start_tts(env)
 
-    # Wait for main backend (required before API calls work)
-    if not wait_for("http://127.0.0.1:8000/health", timeout=20):
-        print("⚠  Main backend didn't start in time")
-    else:
+    # 2. Wait for backend to be ready before opening UI
+    print("Waiting for backend...")
+    if wait_for(f"{URL}/health", timeout=20):
         print("✅ Backend ready")
+    else:
+        print("⚠  Backend slow to start — opening UI anyway")
 
-    print("⏳ TTS voice loading in background (30-60s on CPU)...")
-    print(f"🌐 Opening UI from {FRONTEND_URL}")
+    print("⏳ TTS voice loading in background (20-60s on CPU)...")
 
-    # System tray (handles both processes on quit)
+    # 3. Collect live processes for tray/shutdown
     procs = [p for p in [main_proc, tts_proc] if p]
-    threading.Thread(target=start_tray, args=(procs,), daemon=True).start()
 
-    # Open PyWebView with transparent background
+    # 4. Open PyWebView — frameless + transparent
+    api = Api()
+
     try:
         import webview
-        
-        # Check if frontend is ready
-        if not wait_for(FRONTEND_URL, timeout=5):
-            print("⚠  Frontend server not ready, using fallback URL")
-            fallback_url = "http://127.0.0.1:8000"
-        else:
-            fallback_url = FRONTEND_URL
-        
+
         try:
             window = webview.create_window(
                 "Bhai Irrfan",
-                fallback_url,
+                URL,
                 width=420,
-                height=600,
+                height=500,
                 resizable=False,
                 frameless=True,
-                #background_color="#000000",
-                transparent=True
+                transparent=True,
+                js_api=api,
+                # on_top intentionally removed — other windows go over it normally
             )
         except TypeError:
-            # Fallback for older webview versions
-            window = webview.create_window(
-                "Bhai Irrfan",
-                fallback_url,
-                width=420,
-                height=600,
-                resizable=False,
-                frameless=True
-            )
-        
-        # Start webview with window reference for tray
+            # Older pywebview without transparent support
+            try:
+                window = webview.create_window(
+                    "Bhai Irrfan",
+                    URL,
+                    width=420,
+                    height=600,
+                    resizable=False,
+                    frameless=True,
+                )
+            except TypeError:
+                window = webview.create_window(
+                    "Bhai Irrfan", URL,
+                    width=420, height=500,
+                )
+                
+        api.set_window(window)
+
+        # Start tray with window reference (enables Show Window)
+        threading.Thread(
+            target=start_tray,
+            args=(procs, window),
+            daemon=True
+        ).start()
+
         webview.start(debug=False, private_mode=False)
-        
+
     except ImportError:
         import webbrowser
-        print("⚠  PyWebView not installed, opening in browser")
-        webbrowser.open(FRONTEND_URL)
+        print("⚠  PyWebView not installed — opening browser instead")
+        # Start tray anyway
+        threading.Thread(target=start_tray, args=(procs,), daemon=True).start()
+        webbrowser.open(URL)
+        # Keep process alive for tray
+        try:
+            while True: time.sleep(1)
+        except KeyboardInterrupt:
+            pass
 
-    # Cleanup on window close
-    print("🔄 Shutting down...")
+    # 5. Cleanup when window closes
+    print("Shutting down...")
     for p in procs:
         if p and p.poll() is None:
-            p.terminate()
-            p.wait(timeout=2)
+            try: p.terminate(); p.wait(timeout=3)
+            except Exception: pass
 
 
 if __name__ == "__main__":
