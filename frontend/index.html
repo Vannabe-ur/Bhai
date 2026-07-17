@@ -918,8 +918,45 @@ function getMessageType(text) {
 
 async function speakInChunks(fullText) {
   const sentences = fullText.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 0);
+
+  if (sentences.length === 0) return;
   document.getElementById('fvoice').textContent = 'VOICE: GENERATING...';
-  for (const sentence of sentences) { await speakOne(sentence); }
+  
+  // Pre-fentch all audio in parallel to reduce wait time
+  const audioPromises = sentences.map(sentence =>
+    fetch(API + '/speak', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ 
+        text: sentence, 
+        message_type: getMessageType(sentence) 
+      })
+    })
+    .then(r => r.ok ? r.blob() : null)
+    .then(blob => blob ? URL.createObjectURL(blob) : null)
+    .catch(e => null)
+  );
+
+  // const audioBlobs = await Promise.all(audioPromises);
+  // for (const sentence of sentences) { await speakOne(sentence); }
+  for (const audioPromis of audioPromises){
+    const url = await audioPromis;
+    if (!url) continue;
+
+    await new Promise(resolve => {
+      if (currentAudio) {
+        currentAudio.pause();
+        URL.revokeObjectURL(currentAudio.src);
+      }
+      currentAudio = new Audio(url);
+      currentAudio.volume = volume;
+      currentAudio.onended = () => {
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      currentAudio.onerror = () => resolve();
+      currentAudio.play();
+    });
+  }
   document.getElementById('fvoice').textContent = voiceCloneReady ? 'VOICE: READY' : 'VOICE: NEED SAMPLE';
 }
 
