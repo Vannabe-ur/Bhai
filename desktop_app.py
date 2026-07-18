@@ -13,6 +13,11 @@ BASE_DIR      = Path(__file__).parent
 BACKEND_DIR   = BASE_DIR / "backend"
 NOTEBOOKS_DIR = BASE_DIR / "notebooks"
 
+if getattr(sys, 'frozen', False):
+    BASE_DIR = Path(sys._MEIPASS)
+else:
+    BASE_DIR = Path(__file__).parent
+
 class Api:
     def __init__(self):
         self._window = None

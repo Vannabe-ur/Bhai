@@ -351,13 +351,27 @@ async def _chat_ollama(req: ChatMessage, system_prompt: str):
     overdue = [t for t in pending if t.get("deadline") and 
                datetime.fromisoformat(t["deadline"]) < datetime.now()]
     
+    # fetch calendar events
+    calendar_str = "none"
+    try:
+        result = get_today_events() if TOKEN_FILE.exists() else []
+        events = result if isinstance(result, list) else []
+        if events:
+            calendar_str = ", ".join(
+                f"{e['start']} {e['summary']}" for e in events[:5]
+            )
+
+    except Exception as ex:
+        print(f"⚠ Calendar fetch failed in ollama chat: {ex}")
+    
     compact_system = f"""You are Bhai Irrfan, a sharp loyal AI task assistant. 
     Speak like a wise elder man (Irrfan Khan Bollywood actor). Direct, warm, max 3 sentences.
-    Use "Janu" or "Golu" occasionally. Friendly English only unless doing poetry.
+    Use "Janu" occasionally. Friendly English only unless doing poetry.
     No markdown, no bullet points
     Time: {datetime.now().strftime("%A %d %B %Y, %H:%M")}
     Tasks: {len(pending)} pending, {len(overdue)} overdue.
-    Task titles: {', '.join(t['title'] for t in pending[:5]) or 'none'}"""
+    Task titles: {', '.join(t['title'] for t in pending[:5]) or 'none'}
+    Today's calendar: {calendar_str}"""
 
     messages = [{"role": "system", "content": compact_system}]
 
