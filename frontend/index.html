@@ -4,582 +4,20 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Bhai Irrfan</title>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323:wght@400&display=swap');
-
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-  background: transparent;
-  width: 100vw;
-  height: auto;
-  overflow: visible;
-  font-family: 'Share Tech Mono', monospace;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding-top: 10px;
-}
-
-/* ── CRT flicker animation ─────────────────────────────────── */
-@keyframes crt-flicker {
-  0%   { opacity: 1; }
-  92%  { opacity: 1; }
-  93%  { opacity: 0.96; }
-  94%  { opacity: 1; }
-  98%  { opacity: 1; }
-  99%  { opacity: 0.94; }
-  100% { opacity: 1; }
-}
-
-@keyframes boot-in {
-  0%   { opacity: 0; transform: scaleY(0.02); filter: brightness(3); }
-  8%   { opacity: 1; transform: scaleY(1.01); filter: brightness(1.5); }
-  12%  { transform: scaleY(0.99); }
-  100% { transform: scaleY(1); filter: brightness(1); }
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.3; }
-}
-
-@keyframes blink {
-  0%, 49% { opacity: 1; }
-  50%, 100% { opacity: 0; }
-}
-
-@keyframes scan {
-  0%   { transform: translateY(-100%); }
-  100% { transform: translateY(100vh); }
-}
-
-/* ── Terminal container ────────────────────────────────────── */
-#terminal {
-  position: relative;
-  width: 400px;
-  height: auto;
-  min-height: unset;
-  animation: boot-in 0.6s ease-out forwards, crt-flicker 8s infinite 1s;
-}
-
-/* ── Scanline overlay ──────────────────────────────────────── */
-#terminal::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 100;
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0px,
-    transparent 1px,
-    rgba(163, 233, 218, 0.08) 1px,
-    rgba(0, 0, 0, 0.08) 0px
-  );
-}
-
-/* Moving scan beam */
-#terminal::after {
-  content: '';
-  position: fixed;
-  left: 0; right: 0;
-  height: 80px;
-  pointer-events: none;
-  z-index: 99;
-  background: linear-gradient(
-    transparent,
-    rgba(0, 255, 65, 0.015),
-    transparent
-  );
-  animation: scan 6s linear infinite;
-}
-
-/* ── Title bar ─────────────────────────────────────────────── */
-#titlebar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 0 4px 0;
-  border-bottom: 1px solid #00ff41;
-  cursor: grab;
-  user-select: none;
-  -webkit-app-region: drag;
-  margin-bottom: 6px;
-}
-
-#titlebar button, #titlebar span[onclick] {
-  -webkit-app-region: no-drag;
-}
-
-#titlebar:active { cursor: grabbing; }
-
-#logo {
-  font-family: 'VT323', monospace;
-  font-size: 18px;
-  color: #008a22;
-  letter-spacing: 3px;
-}
-
-#version {
-  font-size: 10px;
-  color: #004a14;
-  letter-spacing: 1px;
-  margin-left: 6px;
-}
-
-.title-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-#dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #00ff41;
-  display: inline-block;
-  animation: pulse 2s ease-in-out infinite;
-  box-shadow: 0 0 6px #00ff41;
-}
-
-#dot.offline {
-  background: #ff2200;
-  box-shadow: 0 0 6px #ff2200;
-  animation: blink 0.6s step-end infinite;
-}
-
-.modebtn {
-  background: transparent;
-  border: 1px solid #004a14;
-  color: #004a14;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 9px;
-  padding: 1px 6px;
-  cursor: pointer;
-  letter-spacing: 1px;
-  -webkit-app-region: no-drag;
-  transition: all 0.15s;
-}
-
-.modebtn:hover {
-  border-color: #00ff41;
-  color: #00ff41;
-}
-
-/* ── Alert ─────────────────────────────────────────────────── */
-#alert {
-  display: none;
-  color: #ff2200;
-  font-size: 10px;
-  letter-spacing: 2px;
-  margin-bottom: 5px;
-  animation: blink 0.5s step-end infinite;
-}
-
-/* ── Section labels ────────────────────────────────────────── */
-.lbl {
-  font-size: 9px;
-  color: #004a14;
-  letter-spacing: 3px;
-  margin-bottom: 4px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.lbl::before {
-  content: '>';
-  color: #00ff41;
-}
-
-/* ── Divider ───────────────────────────────────────────────── */
-.div {
-  border: none;
-  border-top: 1px solid #001a08;
-  margin: 7px 0;
-}
-
-/* ── Scrollable content ────────────────────────────────────── */
-#content {
-  overflow-y: visible;
-  overflow-x: hidden;
-  padding-bottom: 30px;
-}
-
-#content::-webkit-scrollbar { display: none; }
-
-/* ── Clock ─────────────────────────────────────────────────── */
-.clock-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 3px;
-}
-
-#clock {
-  font-family: 'VT323', monospace;
-  font-size: 48px;
-  color: #00ff41;
-  letter-spacing: 4px;
-  line-height: 1;
-  text-shadow: 0 0 20px rgba(0,255,65,0.4);
-}
-
-.clock-right { text-align: right; }
-
-#dateline {
-  font-size: 10px;
-  color: #008a22;
-  line-height: 1.5;
-}
-
-#uptime {
-  font-size: 9px;
-  color: #003010;
-}
-
-/* Signal bars */
-.sigbar {
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  margin-top: 4px;
-}
-
-.sig-label {
-  font-size: 8px;
-  color: #003010;
-  margin-right: 3px;
-  letter-spacing: 1px;
-}
-
-.sp {
-  width: 4px;
-  border-radius: 1px 1px 0 0;
-  background: #001a08;
-}
-
-.sp:nth-child(2) { height: 4px; }
-.sp:nth-child(3) { height: 6px; }
-.sp:nth-child(4) { height: 8px; }
-.sp:nth-child(5) { height: 10px; }
-.sp:nth-child(6) { height: 12px; }
-
-.sp.on { background: #00ff41; box-shadow: 0 0 4px rgba(0,255,65,0.4); }
-
-#sig-pct {
-  font-size: 8px;
-  color: #003010;
-  margin-left: 4px;
-}
-
-/* ── Calendar ──────────────────────────────────────────────── */
-#cal-strip {
-  font-size: 10px;
-  color: #008a22;
-  line-height: 1.8;
-  max-height: 54px;
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-
-#cal-strip::-webkit-scrollbar { display: none; }
-
-#cal-btn {
-  font-size: 9px;
-  color: #005a18;
-  cursor: pointer;
-  letter-spacing: 1px;
-  transition: color 0.15s;
-}
-
-#cal-btn:hover { color: #00ff41; }
-
-/* Volume */
-#vol-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 5px;
-}
-
-#vol-sl {
-  flex: 1;
-  height: 2px;
-  -webkit-appearance: none;
-  appearance: none;
-  background: #001a08;
-  outline: none;
-}
-
-#vol-sl::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: #00ff41;
-  cursor: pointer;
-  box-shadow: 0 0 6px rgba(0,255,65,0.5);
-}
-
-#vol-val {
-  font-size: 9px;
-  color: #004a14;
-  min-width: 28px;
-  text-align: right;
-}
-
-/* ── Tasks ─────────────────────────────────────────────────── */
-#task-list {
-  max-height: 160px;
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-
-#task-list::-webkit-scrollbar { display: none; }
-
-.ti {
-  padding: 4px 8px;
-  margin-bottom: 3px;
-  border-left: 2px solid #00ff41;
-  font-size: 10px;
-  color: #00cc33;
-  position: relative;
-  cursor: pointer;
-  background: transparent;
-  transition: border-color 0.15s, color 0.15s;
-}
-
-.ti::before {
-  content: '';
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 100%;
-  background: rgba(0,255,65,0.0);
-  transition: background 0.15s;
-}
-
-.ti:hover::before { background: rgba(0,255,65,0.03); }
-
-.ti.urgent { border-left-color: #ff8800; color: #ff8800; }
-.ti.overdue { border-left-color: #ff2200; color: #ff4422; animation: blink 1.2s step-end infinite; }
-.ti.done { border-left-color: #003010; color: #003a10; text-decoration: line-through; animation: fadeOut 0.5s ease-out forwards; }
-
-@keyframes fadeout {
-    0%   { opacity: 1;   max-height: 60px; margin-bottom: 3px; }
-    60%  { opacity: 0.3; max-height: 60px; }
-    100% { opacity: 0;   max-height: 0;    margin-bottom: 0; padding: 0; }
-}
-
-.ttitle {
-  font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 240px;
-  letter-spacing: 1px;
-}
-
-.tmeta {
-  font-size: 8px;
-  color: #004a14;
-  display: flex;
-  justify-content: space-between;
-  margin-top: 1px;
-}
-
-.tmeta.urgent { color: #884400; }
-.tmeta.overdue { color: #882200; }
-
-.tchk {
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 13px;
-  color: #003a10;
-  cursor: pointer;
-  transition: color 0.15s;
-  -webkit-app-region: no-drag;
-}
-
-.tchk:hover { color: #00ff41; }
-
-/* ── Inputs ────────────────────────────────────────────────── */
-.add-row {
-  display: flex;
-  gap: 4px;
-  margin-top: 5px;
-}
-
-.ginp {
-  flex: 1;
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid #003010;
-  color: #00ff41;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 10px;
-  padding: 3px 4px;
-  outline: none;
-  transition: border-color 0.15s;
-  letter-spacing: 1px;
-}
-
-.ginp:focus { border-bottom-color: #00ff41; }
-.ginp::placeholder { color: #002a0a; }
-
-.gbtn {
-  background: transparent;
-  border: 1px solid #003a10;
-  color: #005a18;
-  font-size: 14px;
-  cursor: pointer;
-  padding: 0 10px;
-  transition: all 0.15s;
-  font-family: 'Share Tech Mono', monospace;
-}
-
-.gbtn:hover { border-color: #00ff41; color: #00ff41; }
-
-#dl-inp {
-  width: 100%;
-  margin-top: 4px;
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid #002a0a;
-  color: #005a18;
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 9px;
-  padding: 2px 4px;
-  outline: none;
-  letter-spacing: 1px;
-  transition: border-color 0.15s;
-}
-
-#dl-inp:focus { border-bottom-color: #00ff41; }
-
-/* datetime-local calendar icon color */
-#dl-inp::-webkit-calendar-picker-indicator { filter: invert(0.3) sepia(1) saturate(5) hue-rotate(90deg); }
-
-/* ── Chat ──────────────────────────────────────────────────── */
-#chatlog {
-  height: 160px;         /* fixed height — always this tall */
-  min-height: 160px;
-  max-height: 160px;
-  overflow-y: scroll;    /* always shows scrollbar so user knows it scrolls */
-  overflow-x: hidden;
-  font-size: 12px;
-  color: #003010;
-  padding: 4px 0;
-  margin-bottom: 6px;
-  scrollbar-width: thin;
-  scrollbar-color: #003010 transparent;
-  border-left: 1px solid #001a08;
-  padding-left: 8px;
-}
-#chatlog::-webkit-scrollbar { display: none; }
-
-.ma { color: #008a22; }
-.mu { color: #005a18; }
-.ms { color: #003010; font-style: italic; }
-
-.ma, .mu, .ms {
-  white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.6;
-  margin-bottom: 4px;
-  display: block;
-}
-
-.chat-row {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-}
-
-#micbtn, #sndbtn {
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid #003010;
-  color: #005a18;
-  font-size: 12px;
-  cursor: pointer;
-  padding: 2px 8px;
-  transition: all 0.15s;
-  -webkit-app-region: no-drag;
-}
-
-#micbtn:hover, #sndbtn:hover { color: #00ff41; border-bottom-color: #00ff41; }
-
-#micbtn.listening {
-  color: #ff4400;
-  border-bottom-color: #ff4400;
-  animation: blink 0.5s step-end infinite;
-}
-
-.voice-status {
-  font-size: 8px;
-  color: #003010;
-  margin-top: 4px;
-  letter-spacing: 1px;
-}
-
-/* ── Footer ────────────────────────────────────────────────── */
-#footer {
-  border-top: 1px solid #001a08;
-  padding-top: 5px;
-  margin-top: 8px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-#fstatus { font-size: 8px; color: #005a18; letter-spacing: 1px; }
-#ftasks  { font-size: 8px; color: #003a10; }
-#fvoice  { font-size: 8px; color: #003a10; }
-
-/* ── Compact mode ──────────────────────────────────────────── */
-body.compact #terminal { width: 320px; }
-body.compact #cal-sec,
-body.compact #task-sec { display: none; }
-body.compact #chatlog  { height: 110px; }
-body.compact #clock    { font-size: 38px; }
-</style>
+<link rel="stylesheet" href="Style.css"/>
 </head>
 <body>
 
 <div id="terminal">
 
-  <!-- Title bar -->
+  <!-- Title bar: logo | sigbar + dot -->
   <div id="titlebar">
-    <div class="title-left" style="display:flex;align-items:baseline;gap:6px">
+    <div style="display:flex;align-items:baseline;gap:6px">
       <span id="logo">BHAI IRRFAN</span>
       <span id="version">v1.0</span>
     </div>
     <div class="title-right">
-      <button class="modebtn" id="modebtn">POP</button>
-      <span id="dot"></span>
-    </div>
-  </div>
-
-  <!-- Alert banner -->
-  <div id="alert"></div>
-
-  <!-- Scrollable content -->
-  <div id="content">
-
-    <!-- Clock -->
-    <div class="sec">
-      <div class="lbl">SYS.CLOCK</div>
-      <div class="clock-row">
-        <div id="clock">00:00:00</div>
-        <div class="clock-right">
-          <div id="dateline">DATE</div>
-          <div id="uptime">UPTIME: 00:00:00</div>
-        </div>
-      </div>
+      <!-- Signal bars moved here from clock section -->
       <div class="sigbar">
         <span class="sig-label">SIG</span>
         <div class="sp on"></div>
@@ -589,6 +27,24 @@ body.compact #clock    { font-size: 38px; }
         <div class="sp" id="s5"></div>
         <span id="sig-pct">60%</span>
       </div>
+      <span id="dot"></span>
+    </div>
+  </div>
+
+  <!-- Alert banner -->
+  <div id="alert"></div>
+
+  <!-- Content -->
+  <div id="content">
+
+    <!-- Clock: time on its own row, dateline below -->
+    <div class="sec">
+      <div class="lbl">SYS.CLOCK</div>
+      <div class="clock-row">
+        <div id="clock">00:00:00</div>
+      </div>
+      <div id="dateline">DATE</div>
+      <div id="uptime"></div>
     </div>
 
     <hr class="div"/>
@@ -653,20 +109,31 @@ let currentAudio = null;
 let volume = 0.85;
 let voiceCloneReady = false;
 
-// ── Drag (fallback for non-frameless mode) ───────────────────
+// ── Auto-fit window height ───────────────────────────────────
+function fitToContent() {
+  const terminal = document.getElementById('terminal');
+  if (!terminal) return;
+  const height = terminal.getBoundingClientRect().height;
+  if (window.pywebview && window.pywebview.api) {
+    window.pywebview.api.resize_to_content(Math.ceil(height));
+  }
+}
+const resizeObserver = new ResizeObserver(() => fitToContent());
+resizeObserver.observe(document.getElementById('terminal'));
+window.addEventListener('load', () => setTimeout(fitToContent, 300));
+
+// ── Drag ─────────────────────────────────────────────────────
 const terminal = document.getElementById('terminal');
 const bar = document.getElementById('titlebar');
 let drag = false, ox = 0, oy = 0;
-
 bar.addEventListener('mousedown', e => {
   drag = true;
   const r = terminal.getBoundingClientRect();
-  ox = e.clientX - r.left;
-  oy = e.clientY - r.top;
+  ox = e.clientX - r.left; oy = e.clientY - r.top;
 });
 document.addEventListener('mousemove', e => {
   if (!drag) return;
-  let nx = Math.max(0, Math.min(e.clientX - ox, window.innerWidth - terminal.offsetWidth));
+  let nx = Math.max(0, Math.min(e.clientX - ox, window.innerWidth  - terminal.offsetWidth));
   let ny = Math.max(0, Math.min(e.clientY - oy, window.innerHeight - terminal.offsetHeight));
   terminal.style.position = 'fixed';
   terminal.style.left = nx + 'px';
@@ -677,48 +144,10 @@ document.addEventListener('mousemove', e => {
 });
 document.addEventListener('mouseup', () => { drag = false; });
 
-// ── Auto-fit PyWebView window height ─────────────────────────
-function fitToContent() {
-    // Measure the terminal div's actual rendered height
-    const terminal = document.getElementById('terminal');
-    if (!terminal) return;
-
-    const height = terminal.getBoundingClientRect().height;
-
-    // Only call if pywebview API is available (not in browser)
-    if (window.pywebview && window.pywebview.api) {
-        window.pywebview.api.resize_to_content(Math.ceil(height));
-    }
-}
-
-// Watch terminal div for any size changes
-const resizeObserver = new ResizeObserver(() => {
-    fitToContent();
-});
-resizeObserver.observe(document.getElementById('terminal'));
-
-// Also fire on load after fonts/content settle
-window.addEventListener('load', () => setTimeout(fitToContent, 300));
-
-// ── Compact mode ─────────────────────────────────────────────
-const modeBtn = document.getElementById('modebtn');
-function setCompactMode(on) {
-  document.body.classList.toggle('compact', on);
-  modeBtn.textContent = on ? 'FULL' : 'POP';
-  localStorage.setItem('bhaiHudMode', on ? 'compact' : 'full');
-  requestAnimationFrame(fitToContent);
-}
-setCompactMode(localStorage.getItem('bhaiHudMode') === 'compact');
-modeBtn.addEventListener('click', e => {
-  e.stopPropagation();
-  setCompactMode(!document.body.classList.contains('compact'));
-});
-
 // ── Volume ───────────────────────────────────────────────────
 document.getElementById('vol-sl').addEventListener('input', e => {
   volume = parseFloat(e.target.value);
   document.getElementById('vol-val').textContent = Math.round(volume * 100) + '%';
-  requestAnimationFrame(fitToContent);
 });
 
 // ── Clock ────────────────────────────────────────────────────
@@ -804,8 +233,7 @@ function renderTasks() {
     const div = document.createElement('div');
     div.className = 'ti' + (st ? ' ' + st : '');
     const mc = 'tmeta' + (st === 'overdue' ? ' overdue' : st === 'urgent' ? ' urgent' : '');
-    const doneAge   = getDoneSecondsLeft(t);
-    const doneLabel = t.done ?  '✓ DONE' : 'PENDING';
+    const doneLabel = t.done ? '✓ DONE — removing in 3s' : 'PENDING';
     div.innerHTML =
       `<div class="ttitle">${t.title}</div>` +
       `<div class="${mc}"><span>${fmtDl(t.deadline)}</span><span>${doneLabel}</span></div>` +
@@ -832,8 +260,6 @@ async function toggleTask(id) {
     });
   } catch(e) {}
   renderTasks();
-
-  // If task was marked done, remove in after 3 seconds
   if (t.done) {
     setTimeout(() => {
       tasks = tasks.filter(x => x.id !== id);
@@ -864,7 +290,7 @@ document.getElementById('new-inp').addEventListener('keydown', e => { if (e.key 
 // ── Alerts ───────────────────────────────────────────────────
 let lastAlertTime = 0;
 function checkAlerts() {
-  const now    = Date.now();
+  const now     = Date.now();
   const overdue = tasks.filter(t => !t.done && t.deadline && new Date(t.deadline).getTime() < now);
   const urgent  = tasks.filter(t => !t.done && t.deadline &&
     new Date(t.deadline).getTime() - now < 3600000 && new Date(t.deadline).getTime() > now);
@@ -918,74 +344,32 @@ function getMessageType(text) {
 
 async function speakInChunks(fullText) {
   const sentences = fullText.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 0);
-
   if (sentences.length === 0) return;
   document.getElementById('fvoice').textContent = 'VOICE: GENERATING...';
-  
-  // Pre-fentch all audio in parallel to reduce wait time
+
   const audioPromises = sentences.map(sentence =>
     fetch(API + '/speak', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ 
-        text: sentence, 
-        message_type: getMessageType(sentence) 
-      })
+      body: JSON.stringify({ text: sentence, message_type: getMessageType(sentence) })
     })
     .then(r => r.ok ? r.blob() : null)
     .then(blob => blob ? URL.createObjectURL(blob) : null)
-    .catch(e => null)
+    .catch(() => null)
   );
 
-  // const audioBlobs = await Promise.all(audioPromises);
-  // for (const sentence of sentences) { await speakOne(sentence); }
-  for (const audioPromis of audioPromises){
-    const url = await audioPromis;
+  for (const audioPromise of audioPromises) {
+    const url = await audioPromise;
     if (!url) continue;
-
     await new Promise(resolve => {
-      if (currentAudio) {
-        currentAudio.pause();
-        URL.revokeObjectURL(currentAudio.src);
-      }
-      currentAudio = new Audio(url);
-      currentAudio.volume = volume;
-      currentAudio.onended = () => {
-        URL.revokeObjectURL(url);
-        resolve();
-      };
-      currentAudio.onerror = () => resolve();
-      currentAudio.play();
-    });
-  }
-  document.getElementById('fvoice').textContent = voiceCloneReady ? 'VOICE: READY' : 'VOICE: NEED SAMPLE';
-}
-
-async function speakOne(text) {
-  return new Promise(async resolve => {
-    try {
-      const r = await fetch(API + '/speak', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ text, message_type: getMessageType(text) })
-      });
-      if (!r.ok) throw new Error('TTS ' + r.status);
-      const blob = await r.blob();
-      const url  = URL.createObjectURL(blob);
       if (currentAudio) { currentAudio.pause(); URL.revokeObjectURL(currentAudio.src); }
       currentAudio = new Audio(url);
       currentAudio.volume = volume;
       currentAudio.onended = () => { URL.revokeObjectURL(url); resolve(); };
       currentAudio.onerror = () => resolve();
       currentAudio.play();
-    } catch(e) {
-      console.error('TTS error:', e.message);
-      if (window.speechSynthesis) {
-        const u = new SpeechSynthesisUtterance(text);
-        u.rate = 0.92; u.volume = volume;
-        u.onend = () => resolve();
-        speechSynthesis.speak(u);
-      } else { resolve(); }
-    }
-  });
+    });
+  }
+  document.getElementById('fvoice').textContent = voiceCloneReady ? 'VOICE: READY' : 'VOICE: NEED SAMPLE';
 }
 
 async function speak(text) {
@@ -1016,11 +400,8 @@ function addMsg(type, text) {
   const div = document.createElement('div');
   div.className = type === 'agent' ? 'ma' : type === 'user' ? 'mu' : 'ms';
   div.textContent = (type === 'agent' ? 'IRRFAN> ' : type === 'user' ? 'YOU> ' : '[SYS] ') + text;
-
   log.appendChild(div);
-  requestAnimationFrame(() => { 
-    log.scrollTop = log.scrollHeight; 
-  });
+  requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; });
   return div;
 }
 
@@ -1056,7 +437,6 @@ async function sendChat() {
     addMsg('sys', 'ERROR: BACKEND OFFLINE');
   }
 }
-
 document.getElementById('aginp').addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
 
 // ── Voice input ───────────────────────────────────────────────

@@ -11,3 +11,4 @@ notebooks/tts_notebook.ipynb
 
 backend/__pycache__/
 
+dist/
