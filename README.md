@@ -1,4 +1,4 @@
-# BHAI IRRFAN — Local AI Task Agent
+# BHAI — Local AI Task Agent
 > Draggable terminal HUD · Real-time clock · Google Calendar · AI voice agent · Deadline alerts
 
 ---
@@ -6,7 +6,7 @@
 ## 📁 Project Structure
 
 ```
-bhai-irrfan/
+bhai/
 ├── backend/
 │   └── main.py              ← FastAPI server (tasks, AI, TTS, calendar)
 ├── frontend/
@@ -16,7 +16,7 @@ bhai-irrfan/
 │   ├── google_credentials.json   ← Download from Google Cloud Console
 │   └── token.pickle         ← Auto-generated after first auth
 ├── voice/
-│   └── irrfan_sample.wav    ← Drop 10–30s WAV here for voice cloning
+│   └── voice_sample.wav    ← Drop 10–30s WAV here for voice cloning
 ├── data/
 │   └── tasks.json           ← Auto-saved tasks
 ├── notebooks/
