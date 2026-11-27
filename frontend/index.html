@@ -28,6 +28,10 @@
         <span id="sig-pct">60%</span>
       </div>
       <span id="dot"></span>
+      <div class="window-actions">
+        <button id="refresh-btn" type="button" title="Sync Google Calendar" onclick="refreshApp(event)">↻</button>
+        <button id="close-btn" type="button" title="Close Bhai Irrfan" onclick="closeApp(event)">×</button>
+      </div>
     </div>
   </div>
 
@@ -127,6 +131,7 @@ const terminal = document.getElementById('terminal');
 const bar = document.getElementById('titlebar');
 let drag = false, ox = 0, oy = 0;
 bar.addEventListener('mousedown', e => {
+  if (e.target.closest('button, [onclick]')) return;
   drag = true;
   const r = terminal.getBoundingClientRect();
   ox = e.clientX - r.left; oy = e.clientY - r.top;
@@ -313,7 +318,9 @@ function checkAlerts() {
 // ── Calendar ─────────────────────────────────────────────────
 async function loadCalendar() {
   const strip = document.getElementById('cal-strip');
+  const refresh = document.getElementById('refresh-btn');
   strip.textContent = 'SYNCING...';
+  if (refresh) { refresh.disabled = true; refresh.classList.add('spinning'); }
   try {
     const r    = await fetch(API + '/calendar/today');
     const data = await r.json();
@@ -327,10 +334,26 @@ async function loadCalendar() {
     strip.innerHTML = events.map(e => `<div>+ ${e.start} ${e.summary}</div>`).join('');
   } catch(e) {
     strip.textContent = 'BACKEND OFFLINE';
+  } finally {
+    if (refresh) { refresh.disabled = false; refresh.classList.remove('spinning'); }
   }
 }
 async function authCal() {
   try { await fetch(API + '/calendar/auth'); loadCalendar(); } catch(e) {}
+}
+
+async function refreshApp(event) {
+  if (event) event.stopPropagation();
+  await Promise.all([loadCalendar(), loadTasks(), checkHealth()]);
+}
+
+function closeApp(event) {
+  if (event) event.stopPropagation();
+  if (window.pywebview && window.pywebview.api) {
+    window.pywebview.api.quit();
+  } else {
+    window.close();
+  }
 }
 
 // ── TTS ──────────────────────────────────────────────────────
@@ -459,8 +482,7 @@ if (window.SpeechRecognition || window.webkitSpeechRecognition) {
 // ── Quit shortcut ─────────────────────────────────────────────
 document.addEventListener('keydown', e => {
   if (e.ctrlKey && e.shiftKey && e.key === 'Q') {
-    if (window.pywebview && window.pywebview.api) window.pywebview.api.quit();
-    else window.close();
+    closeApp(e);
   }
 });
 

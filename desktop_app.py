@@ -31,6 +31,11 @@ class Api:
             new_height = max(300, min(int(height) + 2, 1000))
             self._window.resize(420, new_height)
 
+    def quit(self):
+        """Close the desktop window; launcher cleanup terminates its services."""
+        if self._window:
+            self._window.destroy()
+
 # ── Environment ───────────────────────────────────────────────
 def _load_env() -> dict:
     env = os.environ.copy()

@@ -154,9 +154,9 @@ def build_system_prompt(tasks, calendar_events=None):
     overdue = [t for t in pending if t.get("deadline") and
                datetime.fromisoformat(t["deadline"]) < datetime.now()]
 
-    cal_str = ""
+    cal_str = "\n\nGOOGLE CALENDAR TODAY: no events found."
     if calendar_events:
-        cal_str = "\n\nGMAIL CALENDAR TODAY:\n" + "\n".join(
+        cal_str = "\n\nGOOGLE CALENDAR TODAY (authoritative schedule):\n" + "\n".join(
             f"- {e['summary']} at {e['start']}" for e in calendar_events
         )
 
@@ -182,6 +182,9 @@ PENDING TASKS: {len(pending)} ({len(overdue)} overdue)
 TASKS: {json.dumps(pending)}{cal_str}
 
 When asked about tasks, read them conversationally.
+When asked about today's schedule, meetings, appointments, or calendar, use GOOGLE CALENDAR TODAY.
+Do not say the calendar is empty when an event is listed there.
+Keep calendar events separate from local tasks; a calendar event is still a scheduled item.
 When something is overdue, be dramatic about it.
 When all is clear, be encouraging.
 """
@@ -203,6 +206,25 @@ def _safe_content(msg: dict) -> str:
     if not isinstance(content, str):
         content = str(content) if content else ""
     return content
+
+
+def _is_calendar_question(message: str) -> bool:
+    """Identify questions where calendar facts must not be hallucinated."""
+    text = message.lower()
+    return any(term in text for term in (
+        "calendar", "schedule", "scheduled", "appointment", "meeting", "event",
+    ))
+
+
+def _calendar_reply(events) -> str:
+    """Give an exact, short answer from Google Calendar data."""
+    if not events:
+        return "You have no Google Calendar events scheduled for today."
+    if len(events) == 1:
+        event = events[0]
+        return f"Yes, you have {event['summary']} scheduled for {event['start']} today."
+    details = "; ".join(f"{e['summary']} at {e['start']}" for e in events[:5])
+    return f"Yes, today's Google Calendar has: {details}."
 
 # ═══════════════════════════════════════════════════════════════
 # REQUEST MODELS
@@ -338,40 +360,45 @@ async def chat(req: ChatMessage):
 
     system_prompt = build_system_prompt(tasks, calendar)
 
+    # Calendar times are factual data. Answer these questions directly so a
+    # small local model cannot confuse the current clock with an event time.
+    if _is_calendar_question(req.message):
+        return {"reply": _calendar_reply(calendar)}
+
     if AI_PROVIDER == "ollama":
-        return await _chat_ollama(req, system_prompt)
+        return await _chat_ollama(req, system_prompt, calendar)
     else:
         return await _chat_gemini(req, system_prompt)
 
 
-async def _chat_ollama(req: ChatMessage, system_prompt: str):
+async def _chat_ollama(req: ChatMessage, system_prompt: str, calendar_events=None):
     """Local Qwen via Ollama — offline, unlimited, no API key."""
     tasks = load_tasks()
     pending = [t for t in tasks if not t.get("done")]
     overdue = [t for t in pending if t.get("deadline") and 
                datetime.fromisoformat(t["deadline"]) < datetime.now()]
     
-    # fetch calendar events
-    calendar_str = "none"
-    try:
-        result = get_today_events() if TOKEN_FILE.exists() else []
-        events = result if isinstance(result, list) else []
-        if events:
-            calendar_str = ", ".join(
-                f"{e['start']} {e['summary']}" for e in events[:5]
-            )
-
-    except Exception as ex:
-        print(f"⚠ Calendar fetch failed in ollama chat: {ex}")
+    # Reuse the events already fetched by /chat. This prevents the model prompt
+    # from disagreeing with the calendar data shown by /calendar/today.
+    events = calendar_events if isinstance(calendar_events, list) else []
     
+    calendar_lines = "\n".join(
+        f"EVENT {i}: title={e.get('summary', '(no title)')}; start_time={e.get('start', '')}"
+        for i, e in enumerate(events, 1)
+    ) or "NO CALENDAR EVENTS"
+
     compact_system = f"""You are Bhai Irrfan, a sharp loyal AI task assistant. 
     Speak like a wise elder man (Irrfan Khan Bollywood actor). Direct, warm, max 3 sentences.
     Use "Janu" occasionally. Friendly English only unless doing poetry.
     No markdown, no bullet points
-    Time: {datetime.now().strftime("%A %d %B %Y, %H:%M")}
+    CURRENT CLOCK (not an event time): {datetime.now().strftime("%A %d %B %Y, %H:%M")}
     Tasks: {len(pending)} pending, {len(overdue)} overdue.
     Task titles: {', '.join(t['title'] for t in pending[:5]) or 'none'}
-    Today's calendar: {calendar_str}"""
+    GOOGLE CALENDAR TODAY — AUTHORITATIVE EVENT DATA:
+    {calendar_lines}
+    CALENDAR RULES: When asked about a calendar event, copy its start_time exactly.
+    Never use CURRENT CLOCK as the event time. If an event is listed, never say the calendar is empty.
+    Calendar events are scheduled items, separate from local tasks."""
 
     messages = [{"role": "system", "content": compact_system}]
 
