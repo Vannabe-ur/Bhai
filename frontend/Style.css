@@ -109,6 +109,34 @@ body {
 
 #titlebar:active { cursor: grabbing; }
 
+.window-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.window-actions button {
+  width: 19px;
+  height: 19px;
+  padding: 0;
+  border: 1px solid #005a18;
+  background: transparent;
+  color: #008a22;
+  font: 16px/15px 'VT323', monospace;
+  cursor: pointer;
+}
+
+.window-actions button:hover {
+  border-color: #00ff41;
+  color: #00ff41;
+}
+
+.window-actions button:disabled { cursor: wait; opacity: 0.55; }
+.window-actions .spinning { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
 #logo {
   font-family: 'VT323', monospace;
   font-size: 18px;

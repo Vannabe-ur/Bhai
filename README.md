@@ -99,7 +99,7 @@ The desktop HUD opens automatically. If your system cannot load `pywebview`, it 
 
 ---
 
-## 💬 What to ask Irrfan
+## 💬 What to ask Bhai
 
 - "What do I have today?"
 - "What's overdue?"
